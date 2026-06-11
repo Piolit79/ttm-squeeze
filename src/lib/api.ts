@@ -3,11 +3,6 @@ const BASE = "/api";
 export interface Bar {
   t: number;
   o: number; h: number; l: number; c: number; v: number;
-  squeeze_dot: "orange" | "red" | "black" | "green";
-  momentum: number | null;
-  momentum_color: "cyan" | "blue" | "yellow" | "red_m" | null;
-  squeeze_on: boolean;
-  squeeze_high: boolean;
 }
 
 export interface BarsResponse {

@@ -6,3 +6,5 @@ backend/
 frontend/
 *.pyc
 __pycache__/
+
+.vercel
