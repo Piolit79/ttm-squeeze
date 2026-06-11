@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { fetchBars, fetchSignals, fetchScan } from './lib/api';
@@ -39,8 +39,29 @@ export default function App() {
 
   const latestSig = sigsData?.signals?.slice(-1)[0];
 
+  // Measure the chart container so lightweight-charts gets exact pixel heights.
+  const chartAreaRef = useRef<HTMLDivElement>(null);
+  const [chartAreaH, setChartAreaH] = useState(
+    () => Math.max(300, (typeof window !== 'undefined' ? window.innerHeight : 800) - 300),
+  );
+  useEffect(() => {
+    const el = chartAreaRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const h = el.clientHeight;
+      if (h > 0) setChartAreaH(h);
+    });
+    ro.observe(el);
+    if (el.clientHeight > 0) setChartAreaH(el.clientHeight);
+    return () => ro.disconnect();
+  }, []);
+
+  // Price gets ~68% of chart area, momentum ~32%
+  const priceH = Math.round(chartAreaH * 0.68);
+  const momH   = chartAreaH - priceH - 1; // -1 for the separator pixel
+
   return (
-    <div className="min-h-screen bg-[#0f1117] text-slate-200 flex flex-col">
+    <div className="h-screen bg-[#0f1117] text-slate-200 flex flex-col overflow-hidden">
 
       {/* ── Header / toolbar ─────────────────────────────────────────────── */}
       <header className="border-b border-slate-800 px-4 py-2 flex items-center gap-3 flex-wrap">
@@ -108,16 +129,16 @@ export default function App() {
         )}
       </header>
 
-      {/* ── Chart ──────────────────────────────────────────────────────────── */}
-      <div className="px-4 pt-3 pb-0">
+      {/* ── Chart area — grows to fill space between toolbar and screener ── */}
+      <div ref={chartAreaRef} className="flex-1 min-h-0 px-4 pt-2 pb-0">
         {barsLoading && (
-          <div className="flex items-center justify-center gap-2 text-slate-500 py-16">
+          <div className="flex items-center justify-center h-full gap-2 text-slate-500">
             <Loader2 size={18} className="animate-spin" />
             <span className="text-sm">Loading {ticker} {tf}…</span>
           </div>
         )}
         {barsErr && (
-          <div className="flex items-center justify-center text-red-400 text-sm py-16">
+          <div className="flex items-center justify-center h-full text-red-400 text-sm">
             Failed to load bars.
           </div>
         )}
@@ -126,14 +147,14 @@ export default function App() {
             bars={barsData.bars}
             signals={sigsData?.signals ?? []}
             opts={ttmOpts}
-            priceHeight={300}
-            momHeight={150}
+            priceHeight={priceH}
+            momHeight={momH}
           />
         )}
       </div>
 
       {/* ── Legend ─────────────────────────────────────────────────────────── */}
-      <div className="px-4 py-1.5 border-b border-slate-800 flex items-center gap-4 text-xs text-slate-600 flex-wrap">
+      <div className="flex-none px-4 py-1.5 border-b border-slate-800 flex items-center gap-4 text-xs text-slate-600 flex-wrap">
         <span className="font-semibold text-slate-500">Squeeze:</span>
         {[['bg-orange-500','High'],['bg-red-500','Mid'],['bg-slate-500','Low'],['bg-green-500','Fired']].map(([cls,lbl]) => (
           <span key={lbl} className="flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${cls}`}/>{lbl}</span>
@@ -148,8 +169,8 @@ export default function App() {
         <span className="text-red-400">↓ Stop</span>
       </div>
 
-      {/* ── Screener ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-col flex-1 overflow-hidden">
+      {/* ── Screener — fixed-height band at the bottom ─────────────────────── */}
+      <div className="flex-none flex flex-col border-t border-slate-800">
         <div className="px-4 py-1.5 flex items-center justify-between border-b border-slate-800 flex-shrink-0">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Screener</span>
           <div className="flex items-center gap-3">
