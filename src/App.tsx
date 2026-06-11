@@ -4,12 +4,15 @@ import { RefreshCw, Loader2 } from 'lucide-react';
 import { fetchBars, fetchSignals, fetchScan } from './lib/api';
 import SqueezeChart from './components/SqueezeChart';
 import ScanTable from './components/ScanTable';
+import Backtest from './pages/Backtest';
 import type { TTMOpts } from './lib/ttm';
 
 const WATCHLIST = ['NVDA', 'GOOGL', 'AMZN', 'TSLA', 'MSFT'];
 type TF = '1Hour' | '1Day';
+type Page = 'chart' | 'backtest';
 
 export default function App() {
+  const [page, setPage]     = useState<Page>('chart');
   const [ticker, setTicker] = useState('NVDA');
   const [tf, setTf]         = useState<TF>('1Hour');
   const [length, setLength] = useState(20);
@@ -69,67 +72,78 @@ export default function App() {
 
         <div className="w-px h-4 bg-slate-700 shrink-0" />
 
-        {/* Ticker buttons */}
+        {/* Page tabs */}
         <div className="flex gap-1">
-          {WATCHLIST.map(t => (
+          {(['chart', 'backtest'] as Page[]).map(p => (
             <button
-              key={t}
-              onClick={() => setTicker(t)}
-              className={`px-3 py-1 rounded text-xs font-semibold transition-colors
-                ${ticker === t ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-200'}`}
+              key={p}
+              onClick={() => setPage(p)}
+              className={`px-3 py-1 rounded text-xs font-semibold capitalize transition-colors
+                ${page === p ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-200'}`}
             >
-              {t}
+              {p === 'chart' ? 'Chart' : 'Backtest'}
             </button>
           ))}
         </div>
 
-        <div className="w-px h-4 bg-slate-700 shrink-0" />
+        {/* Chart-specific controls */}
+        {page === 'chart' && (
+          <>
+            <div className="w-px h-4 bg-slate-700 shrink-0" />
+            <div className="flex gap-1">
+              {WATCHLIST.map(t => (
+                <button key={t} onClick={() => setTicker(t)}
+                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors
+                    ${ticker === t ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-200'}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div className="w-px h-4 bg-slate-700 shrink-0" />
+            <div className="flex gap-1">
+              {(['1Hour', '1Day'] as TF[]).map(t => (
+                <button key={t} onClick={() => setTf(t)}
+                  className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors
+                    ${tf === t ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-200'}`}>
+                  {t === '1Hour' ? '1H' : '1D'}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
-        {/* Timeframe */}
-        <div className="flex gap-1">
-          {(['1Hour', '1Day'] as TF[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setTf(t)}
-              className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors
-                ${tf === t ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-200'}`}
-            >
-              {t === '1Hour' ? '1H' : '1D'}
-            </button>
-          ))}
-        </div>
-
-        <div className="w-px h-4 bg-slate-700 shrink-0" />
-
-        {/* Length input */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-slate-500">Length</span>
-          <input
-            type="number" min={5} max={100} step={1}
-            value={length}
-            onChange={e => setLength(Math.max(5, Math.min(100, Number(e.target.value))))}
-            className="w-14 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-white text-center focus:outline-none focus:border-blue-500"
-          />
-        </div>
-
-        {/* Settings display */}
-        <span className="text-xs text-slate-600 hidden sm:inline">
-          BB ±{ttmOpts.bbMult}σ · KC {ttmOpts.kcHigh}×/{ttmOpts.kcMid}×/{ttmOpts.kcLow}× ATR
-        </span>
-
-        {/* Latest signal */}
-        {latestSig && (
-          <div className="ml-auto flex items-center gap-3 text-xs font-mono flex-wrap shrink-0">
-            <span className="text-slate-500">Last signal</span>
-            <span className="text-slate-300">{new Date(latestSig.bar_time).toLocaleDateString()}</span>
-            <span>Entry <span className="text-white">${latestSig.entry_price.toFixed(2)}</span></span>
-            <span className="text-red-400">Stop ${latestSig.stop_price.toFixed(2)}</span>
-            <span className="text-green-400">Target ${latestSig.target_price.toFixed(2)}</span>
-          </div>
+        {page === 'chart' && (
+          <>
+            <div className="w-px h-4 bg-slate-700 shrink-0" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-500">Length</span>
+              <input type="number" min={5} max={100} step={1} value={length}
+                onChange={e => setLength(Math.max(5, Math.min(100, Number(e.target.value))))}
+                className="w-14 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-white text-center focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <span className="text-xs text-slate-600 hidden sm:inline">
+              BB ±{ttmOpts.bbMult}σ · KC {ttmOpts.kcHigh}×/{ttmOpts.kcMid}×/{ttmOpts.kcLow}× ATR
+            </span>
+            {latestSig && (
+              <div className="ml-auto flex items-center gap-3 text-xs font-mono flex-wrap shrink-0">
+                <span className="text-slate-500">Last signal</span>
+                <span className="text-slate-300">{new Date(latestSig.bar_time).toLocaleDateString()}</span>
+                <span>Entry <span className="text-white">${latestSig.entry_price.toFixed(2)}</span></span>
+                <span className="text-red-400">Stop ${latestSig.stop_price.toFixed(2)}</span>
+                <span className="text-green-400">Target ${latestSig.target_price.toFixed(2)}</span>
+              </div>
+            )}
+          </>
         )}
       </header>
 
-      {/* ── Chart area — grows to fill space between toolbar and screener ── */}
+      {/* ── Backtest page ────────────────────────────────────────────────────── */}
+      {page === 'backtest' && <Backtest />}
+
+      {/* ── Chart page ──────────────────────────────────────────────────────── */}
+      {page === 'chart' && (
+      <>
       <div ref={chartAreaRef} className="flex-1 min-h-0 px-4 pt-2 pb-0">
         {barsLoading && (
           <div className="flex items-center justify-center h-full gap-2 text-slate-500">
@@ -153,6 +167,7 @@ export default function App() {
         )}
       </div>
 
+      {/* ── Legend ─────────────────────────────────────────────────────────── */}
       {/* ── Legend ─────────────────────────────────────────────────────────── */}
       <div className="flex-none px-4 py-1.5 border-b border-slate-800 flex items-center gap-4 text-xs text-slate-600 flex-wrap">
         <span className="font-semibold text-slate-500">Squeeze:</span>
@@ -206,6 +221,7 @@ export default function App() {
           )}
         </div>
       </div>
+      </> )} {/* end chart page */}
 
     </div>
   );
