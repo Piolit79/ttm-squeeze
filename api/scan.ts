@@ -125,7 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? tickersParam.split(',')
         .map(t => t.trim().toUpperCase())
         .filter(t => /^[A-Z]{1,5}$/.test(t))
-        .slice(0, 30)
+        .slice(0, 50)
     : WATCHLIST;
 
   if (list.length === 0) return res.status(400).json({ error: 'No valid tickers' });

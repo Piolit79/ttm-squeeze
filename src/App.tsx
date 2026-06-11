@@ -46,11 +46,16 @@ export default function App() {
     reader.onload = ev => {
       const text = ev.target?.result as string;
       const tickers = text
-        .split(/[\r\n,;]+/)
-        .map(t => t.trim().toUpperCase().replace(/[^A-Z]/g, ''))
+        .split(/[\r\n,;|\t]+/)
+        .map(t => {
+          const upper = t.trim().toUpperCase();
+          // Handle EXCHANGE:TICKER format (TradingView exports)
+          return upper.includes(':') ? upper.split(':').pop()! : upper;
+        })
+        .map(t => t.replace(/[^A-Z]/g, ''))
         .filter(t => /^[A-Z]{1,5}$/.test(t));
       if (tickers.length === 0) return;
-      const deduped = [...new Set(tickers)].slice(0, 30);
+      const deduped = [...new Set(tickers)].slice(0, 50);
       setWatchlist(deduped);
       localStorage.setItem('watchlist', JSON.stringify(deduped));
       setTicker(deduped[0]);
