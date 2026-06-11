@@ -1,9 +1,7 @@
 /**
  * SqueezeChart — two stacked charts with synchronized time scales:
- *   Top pane:    candlestick + buy arrows (green ↑) + exit arrows (yellow ↓ target, red ↓ stop)
+ *   Top pane:    candlestick + buy/exit arrows + SMC overlay
  *   Bottom pane: TTM momentum histogram + squeeze dot markers
- *
- * TTM is computed on the frontend from raw OHLCV so length can be changed without an API round-trip.
  */
 import { useEffect, useRef } from "react";
 import {
@@ -14,6 +12,8 @@ import {
 } from "lightweight-charts";
 import type { Bar, Signal } from "../lib/api";
 import { computeTTM, type TTMOpts, type OHLCBar } from "../lib/ttm";
+import { computeSMC, type SMCOpts } from "../lib/smc";
+import { SMCPrimitive, type SMCDrawData } from "./SMCPrimitive";
 
 const DOT_COLOR: Record<string, string> = {
   orange: "#f97316",
@@ -61,19 +61,20 @@ function findExits(bars: Bar[], signals: Signal[]): ExitMarker[] {
 }
 
 interface Props {
-  bars: Bar[];
-  signals: Signal[];
-  opts: TTMOpts;
+  bars:        Bar[];
+  signals:     Signal[];
+  opts:        TTMOpts;
+  smcOpts?:    SMCOpts;
   priceHeight?: number;
-  momHeight?: number;
+  momHeight?:   number;
 }
 
 export default function SqueezeChart({
-  bars, signals, opts,
+  bars, signals, opts, smcOpts,
   priceHeight = 320, momHeight = 160,
 }: Props) {
-  const priceRef = useRef<HTMLDivElement>(null);
-  const momRef   = useRef<HTMLDivElement>(null);
+  const priceRef  = useRef<HTMLDivElement>(null);
+  const momRef    = useRef<HTMLDivElement>(null);
   const chartsRef = useRef<{ p: IChartApi; m: IChartApi } | null>(null);
 
   useEffect(() => {
@@ -99,26 +100,84 @@ export default function SqueezeChart({
       time: b.t as Time, open: b.o, high: b.h, low: b.l, close: b.c,
     })));
 
-    // Buy + exit markers merged and sorted chronologically
-    const buyMarkers = signals.map(s => ({
-      time:     Math.floor(new Date(s.bar_time).getTime() / 1000) as Time,
-      position: 'belowBar' as const,
-      color:    "#22c55e",
-      shape:    'arrowUp' as const,
-      text:     `B $${s.entry_price.toFixed(2)}`,
-      size:     1,
-    }));
-    const exitMarkers = exits.map(e => ({
-      time:     e.time as Time,
-      position: 'aboveBar' as const,
-      color:    e.type === 'target' ? "#eab308" : "#ef4444",
-      shape:    'arrowDown' as const,
-      text:     e.type === 'target' ? `T $${e.price.toFixed(2)}` : `S $${e.price.toFixed(2)}`,
-      size:     1,
-    }));
-    const allMarkers = [...buyMarkers, ...exitMarkers]
-      .sort((a, b) => (a.time as number) - (b.time as number));
-    if (allMarkers.length > 0) candle.setMarkers(allMarkers);
+    // ── SMC overlay ───────────────────────────────────────────────────────────
+    if (smcOpts) {
+      const smc     = computeSMC(bars as OHLCBar[], smcOpts);
+      const prim    = new SMCPrimitive();
+      const drawData: SMCDrawData = {
+        swingOBs:     smcOpts.showOrderBlocks ? smc.swingOBs    : [],
+        internalOBs:  smcOpts.showOrderBlocks ? smc.internalOBs : [],
+        fvgs:         smcOpts.showFVGs        ? smc.fvgs        : [],
+        swingEvts:    smcOpts.showSwings      ? smc.swingStructure    : [],
+        internalEvts: smcOpts.showInternals   ? smc.internalStructure : [],
+        highLow:      smcOpts.showHighLow     ? smc.highLow     : null,
+        lastBarTime:  bars[bars.length - 1].t,
+      };
+      candle.attachPrimitive(prim);
+      prim.update(drawData);
+
+      // BOS/CHoCH markers on the price chart
+      const smcMarkers = [
+        ...smc.swingStructure.map(e => ({
+          time:     e.toTime as Time,
+          position: (e.bias === 'bullish' ? 'belowBar' : 'aboveBar') as 'belowBar' | 'aboveBar',
+          color:    e.bias === 'bullish' ? '#089981' : '#F23645',
+          shape:    (e.bias === 'bullish' ? 'arrowUp' : 'arrowDown') as 'arrowUp' | 'arrowDown',
+          text:     e.type,
+          size:     1,
+        })),
+        ...(smcOpts.showInternals ? smc.internalStructure.map(e => ({
+          time:     e.toTime as Time,
+          position: (e.bias === 'bullish' ? 'belowBar' : 'aboveBar') as 'belowBar' | 'aboveBar',
+          color:    e.bias === 'bullish' ? 'rgba(8,153,129,0.7)' : 'rgba(242,54,69,0.7)',
+          shape:    (e.bias === 'bullish' ? 'arrowUp' : 'arrowDown') as 'arrowUp' | 'arrowDown',
+          text:     e.type,
+          size:     1,
+        })) : []),
+      ].sort((a, b) => (a.time as number) - (b.time as number));
+
+      // Merge with TTM buy/exit markers
+      const buyMarkers = signals.map(s => ({
+        time:     Math.floor(new Date(s.bar_time).getTime() / 1000) as Time,
+        position: 'belowBar' as const,
+        color:    "#22c55e",
+        shape:    'arrowUp' as const,
+        text:     `B $${s.entry_price.toFixed(2)}`,
+        size:     1,
+      }));
+      const exitMarkers = exits.map(e => ({
+        time:     e.time as Time,
+        position: 'aboveBar' as const,
+        color:    e.type === 'target' ? "#eab308" : "#ef4444",
+        shape:    'arrowDown' as const,
+        text:     e.type === 'target' ? `T $${e.price.toFixed(2)}` : `S $${e.price.toFixed(2)}`,
+        size:     1,
+      }));
+      const allMarkers = [...buyMarkers, ...exitMarkers, ...smcMarkers]
+        .sort((a, b) => (a.time as number) - (b.time as number));
+      if (allMarkers.length > 0) candle.setMarkers(allMarkers);
+    } else {
+      // No SMC — just TTM signals
+      const buyMarkers = signals.map(s => ({
+        time:     Math.floor(new Date(s.bar_time).getTime() / 1000) as Time,
+        position: 'belowBar' as const,
+        color:    "#22c55e",
+        shape:    'arrowUp' as const,
+        text:     `B $${s.entry_price.toFixed(2)}`,
+        size:     1,
+      }));
+      const exitMarkers = exits.map(e => ({
+        time:     e.time as Time,
+        position: 'aboveBar' as const,
+        color:    e.type === 'target' ? "#eab308" : "#ef4444",
+        shape:    'arrowDown' as const,
+        text:     e.type === 'target' ? `T $${e.price.toFixed(2)}` : `S $${e.price.toFixed(2)}`,
+        size:     1,
+      }));
+      const allMarkers = [...buyMarkers, ...exitMarkers]
+        .sort((a, b) => (a.time as number) - (b.time as number));
+      if (allMarkers.length > 0) candle.setMarkers(allMarkers);
+    }
 
     // ── Momentum chart (bottom) ───────────────────────────────────────────────
     const mc = createChart(momRef.current, {
@@ -140,7 +199,6 @@ export default function SqueezeChart({
         })),
     );
 
-    // Squeeze dots: tiny ±0.001 bars pinned at zero, colored by dot state
     const dots = mc.addHistogramSeries({ color: "#22c55e", base: 0 } as Parameters<typeof mc.addHistogramSeries>[0]);
     dots.setData(bars.map((b, i) => ({
       time:  b.t as Time,
@@ -180,7 +238,9 @@ export default function SqueezeChart({
       mc.remove();
       chartsRef.current = null;
     };
-  }, [bars, signals, opts.length, opts.bbMult, opts.kcHigh, opts.kcMid, opts.kcLow, priceHeight, momHeight]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bars, signals, opts.length, opts.bbMult, opts.kcHigh, opts.kcMid, opts.kcLow, priceHeight, momHeight,
+      smcOpts?.swingsLength, smcOpts?.showInternals, smcOpts?.showSwings, smcOpts?.showOrderBlocks,
+      smcOpts?.showFVGs, smcOpts?.showHighLow, smcOpts?.internalObCount, smcOpts?.swingObCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="w-full">

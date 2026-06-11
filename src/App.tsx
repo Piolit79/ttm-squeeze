@@ -6,6 +6,7 @@ import SqueezeChart from './components/SqueezeChart';
 import ScanTable from './components/ScanTable';
 import Backtest from './pages/Backtest';
 import type { TTMOpts } from './lib/ttm';
+import { DEFAULT_SMC_OPTS, type SMCOpts } from './lib/smc';
 
 const WATCHLIST = ['NVDA', 'GOOGL', 'AMZN', 'TSLA', 'MSFT'];
 type TF = '1Hour' | '1Day';
@@ -23,6 +24,9 @@ export default function App() {
     localStorage.setItem('ttm-length', String(v));
     setLength(v);
   }, []);
+
+  const [showSMC, setShowSMC] = useState(true);
+  const [smcOpts, setSmcOpts] = useState<SMCOpts>(DEFAULT_SMC_OPTS);
 
   const ttmOpts: TTMOpts = useMemo(
     () => ({ length, bbMult: 2.0, kcHigh: 1.0, kcMid: 1.5, kcLow: 2.0 }),
@@ -132,6 +136,33 @@ export default function App() {
             <span className="text-xs text-slate-600 hidden sm:inline">
               BB ±{ttmOpts.bbMult}σ · KC {ttmOpts.kcHigh}×/{ttmOpts.kcMid}×/{ttmOpts.kcLow}× ATR
             </span>
+            <div className="w-px h-4 bg-slate-700 shrink-0" />
+            {/* SMC toggles */}
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => setShowSMC(v => !v)}
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors
+                  ${showSMC ? 'bg-purple-700 text-white' : 'text-slate-500 hover:text-slate-200'}`}>
+                SMC
+              </button>
+              {showSMC && (
+                <>
+                  {([
+                    ['Swings',  'showSwings'],
+                    ['Int',     'showInternals'],
+                    ['OB',      'showOrderBlocks'],
+                    ['FVG',     'showFVGs'],
+                    ['HL',      'showHighLow'],
+                  ] as [string, keyof SMCOpts][]).map(([lbl, key]) => (
+                    <button key={key}
+                      onClick={() => setSmcOpts(o => ({ ...o, [key]: !o[key] }))}
+                      className={`px-2 py-1 rounded text-xs font-semibold transition-colors
+                        ${smcOpts[key] ? 'bg-slate-700 text-white' : 'text-slate-600 hover:text-slate-400'}`}>
+                      {lbl}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
             {latestSig && (
               <div className="ml-auto flex items-center gap-3 text-xs font-mono flex-wrap shrink-0">
                 <span className="text-slate-500">Last signal</span>
@@ -168,6 +199,7 @@ export default function App() {
             bars={barsData.bars}
             signals={sigsData?.signals ?? []}
             opts={ttmOpts}
+            smcOpts={showSMC ? smcOpts : undefined}
             priceHeight={priceH}
             momHeight={momH}
           />
