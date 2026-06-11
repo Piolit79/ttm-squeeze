@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/bars.ts":    { "maxDuration": 60 },
+    "api/signals.ts": { "maxDuration": 60 },
+    "api/scan.ts":    { "maxDuration": 120 }
+  }
+}
