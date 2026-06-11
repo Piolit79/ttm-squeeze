@@ -72,8 +72,11 @@ export async function fetchSignals(ticker: string): Promise<SignalsResponse> {
   return r.json();
 }
 
-export async function fetchScan(): Promise<ScanResponse> {
-  const r = await fetch(`${BASE}/scan`);
+export async function fetchScan(tickers?: string[]): Promise<ScanResponse> {
+  const url = tickers && tickers.length > 0
+    ? `${BASE}/scan?tickers=${tickers.join(',')}`
+    : `${BASE}/scan`;
+  const r = await fetch(url);
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
   return r.json();
 }

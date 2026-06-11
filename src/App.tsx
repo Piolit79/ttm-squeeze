@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, Loader2 } from 'lucide-react';
+import { RefreshCw, Loader2, Upload } from 'lucide-react';
 import { fetchBars, fetchSignals, fetchScan } from './lib/api';
 import SqueezeChart from './components/SqueezeChart';
 import ScanTable from './components/ScanTable';
@@ -8,9 +8,20 @@ import Backtest from './pages/Backtest';
 import type { TTMOpts } from './lib/ttm';
 import { DEFAULT_SMC_OPTS, type SMCOpts } from './lib/smc';
 
-const WATCHLIST = ['NVDA', 'GOOGL', 'AMZN', 'TSLA', 'MSFT'];
+const DEFAULT_WATCHLIST = ['NVDA', 'GOOGL', 'AMZN', 'TSLA', 'MSFT'];
 type TF = '1Hour' | '1Day';
 type Page = 'chart' | 'backtest';
+
+function loadWatchlist(): string[] {
+  try {
+    const saved = localStorage.getItem('watchlist');
+    if (saved) {
+      const parsed = JSON.parse(saved) as string[];
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_WATCHLIST;
+}
 
 export default function App() {
   const [page, setPage]     = useState<Page>('chart');
@@ -23,6 +34,29 @@ export default function App() {
   const setLengthPersist = useCallback((v: number) => {
     localStorage.setItem('ttm-length', String(v));
     setLength(v);
+  }, []);
+
+  const [watchlist, setWatchlist] = useState<string[]>(loadWatchlist);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleWatchlistFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const text = ev.target?.result as string;
+      const tickers = text
+        .split(/[\r\n,;]+/)
+        .map(t => t.trim().toUpperCase().replace(/[^A-Z]/g, ''))
+        .filter(t => /^[A-Z]{1,5}$/.test(t));
+      if (tickers.length === 0) return;
+      const deduped = [...new Set(tickers)].slice(0, 30);
+      setWatchlist(deduped);
+      localStorage.setItem('watchlist', JSON.stringify(deduped));
+      setTicker(deduped[0]);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   }, []);
 
   const [showSMC, setShowSMC] = useState(true);
@@ -46,8 +80,8 @@ export default function App() {
   });
 
   const { data: scanData, isLoading: scanLoading, refetch: refetchScan } = useQuery({
-    queryKey:  ['scan'],
-    queryFn:   fetchScan,
+    queryKey:  ['scan', watchlist],
+    queryFn:   () => fetchScan(watchlist),
     staleTime: 5 * 60_000,
   });
 
@@ -100,16 +134,6 @@ export default function App() {
         {/* Chart-specific controls */}
         {page === 'chart' && (
           <>
-            <div className="w-px h-4 bg-slate-700 shrink-0" />
-            <div className="flex gap-1">
-              {WATCHLIST.map(t => (
-                <button key={t} onClick={() => setTicker(t)}
-                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors
-                    ${ticker === t ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-200'}`}>
-                  {t}
-                </button>
-              ))}
-            </div>
             <div className="w-px h-4 bg-slate-700 shrink-0" />
             <div className="flex gap-1">
               {(['1Hour', '1Day'] as TF[]).map(t => (
@@ -226,11 +250,30 @@ export default function App() {
       {/* ── Screener — fixed-height band at the bottom ─────────────────────── */}
       <div className="flex-none flex flex-col border-t border-slate-800">
         <div className="px-4 py-1.5 flex items-center justify-between border-b border-slate-800 flex-shrink-0">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Screener</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Screener</span>
+            <span className="text-xs text-slate-600">{watchlist.length} tickers</span>
+          </div>
           <div className="flex items-center gap-3">
             {scanData && (
               <span className="text-xs text-slate-600">{new Date(scanData.scanned_at).toLocaleTimeString()}</span>
             )}
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,.csv"
+              className="hidden"
+              onChange={handleWatchlistFile}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-200 transition-colors"
+              title="Import watchlist from .txt file (one ticker per line)"
+            >
+              <Upload size={11} />
+              Import
+            </button>
             <button
               onClick={() => refetchScan()}
               disabled={scanLoading}

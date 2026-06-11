@@ -115,16 +115,27 @@ async function scanTicker(
   };
 }
 
-export default async function handler(_req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  if (_req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method === 'OPTIONS') return res.status(204).end();
+
+  // Accept custom watchlist via ?tickers=NVDA,AAPL,MSFT (max 30)
+  const tickersParam = req.query.tickers as string | undefined;
+  const list: string[] = tickersParam
+    ? tickersParam.split(',')
+        .map(t => t.trim().toUpperCase())
+        .filter(t => /^[A-Z]{1,5}$/.test(t))
+        .slice(0, 30)
+    : WATCHLIST;
+
+  if (list.length === 0) return res.status(400).json({ error: 'No valid tickers' });
 
   const db = makeClient();
   const results = [];
   const errors: { ticker: string; error: string }[] = [];
 
   await Promise.all(
-    WATCHLIST.map(async ticker => {
+    list.map(async ticker => {
       try {
         results.push(await scanTicker(db, ticker));
       } catch (e: any) {
@@ -135,7 +146,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
 
   return res.status(200).json({
     scanned_at: new Date().toISOString(),
-    watchlist:  WATCHLIST,
+    watchlist:  list,
     results,
     errors,
   });
