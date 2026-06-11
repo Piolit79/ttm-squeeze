@@ -36,7 +36,16 @@ async function getBarsWithCache(
   if (cached) return cached;
   const days = timeframe === '1Day' ? 400 : 365;
   const start = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-  const raw = await getStockBars(ticker, timeframe, start);
+  // Retry once on 429 after a short back-off
+  let raw;
+  try {
+    raw = await getStockBars(ticker, timeframe, start);
+  } catch (e: any) {
+    if (e.message?.includes('429')) {
+      await new Promise(r => setTimeout(r, 1000));
+      raw = await getStockBars(ticker, timeframe, start);
+    } else throw e;
+  }
   const ohlc = toOHLC(raw);
   await saveBars(db, ticker, timeframe, ohlc);
   return ohlc;
@@ -134,15 +143,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const results = [];
   const errors: { ticker: string; error: string }[] = [];
 
-  await Promise.all(
-    list.map(async ticker => {
-      try {
-        results.push(await scanTicker(db, ticker));
-      } catch (e: any) {
-        errors.push({ ticker, error: e.message });
-      }
-    }),
-  );
+  // Process in batches of 5 with a 250ms pause between batches to stay
+  // under Alpaca's burst rate limit (each ticker needs 2 API calls: 1H + 1D).
+  const BATCH = 5;
+  for (let i = 0; i < list.length; i += BATCH) {
+    const batch = list.slice(i, i + BATCH);
+    await Promise.all(
+      batch.map(async ticker => {
+        try {
+          results.push(await scanTicker(db, ticker));
+        } catch (e: any) {
+          errors.push({ ticker, error: e.message });
+        }
+      }),
+    );
+    if (i + BATCH < list.length) {
+      await new Promise(r => setTimeout(r, 250));
+    }
+  }
 
   return res.status(200).json({
     scanned_at: new Date().toISOString(),
