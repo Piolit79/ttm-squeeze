@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { fetchBars, fetchSignals, fetchScan } from './lib/api';
@@ -15,7 +15,14 @@ export default function App() {
   const [page, setPage]     = useState<Page>('chart');
   const [ticker, setTicker] = useState('NVDA');
   const [tf, setTf]         = useState<TF>('1Hour');
-  const [length, setLength] = useState(20);
+  const [length, setLength] = useState(() => {
+    const saved = localStorage.getItem('ttm-length');
+    return saved ? parseInt(saved, 10) : 7;
+  });
+  const setLengthPersist = useCallback((v: number) => {
+    localStorage.setItem('ttm-length', String(v));
+    setLength(v);
+  }, []);
 
   const ttmOpts: TTMOpts = useMemo(
     () => ({ length, bbMult: 2.0, kcHigh: 1.0, kcMid: 1.5, kcLow: 2.0 }),
@@ -118,7 +125,7 @@ export default function App() {
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-500">Length</span>
               <input type="number" min={5} max={100} step={1} value={length}
-                onChange={e => setLength(Math.max(5, Math.min(100, Number(e.target.value))))}
+                onChange={e => setLengthPersist(Math.max(5, Math.min(100, Number(e.target.value))))}
                 className="w-14 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-white text-center focus:outline-none focus:border-blue-500"
               />
             </div>

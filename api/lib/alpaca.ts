@@ -19,14 +19,15 @@ export interface AlpacaBar {
 /**
  * Fetch all bars for a symbol + timeframe, paginating through next_page_token.
  * timeframe: "1Hour" | "1Day"
- * lookback:  how many calendar days back to start
+ * start:     ISO date string e.g. "2020-01-01"
+ * end:       ISO date string (optional, defaults to today)
  */
 export async function getStockBars(
   symbol: string,
   timeframe: '1Hour' | '1Day',
-  lookbackDays = 365,
+  start: string,
+  end?: string,
 ): Promise<AlpacaBar[]> {
-  const start = new Date(Date.now() - lookbackDays * 86_400_000).toISOString().slice(0, 10);
   const bars: AlpacaBar[] = [];
   let pageToken: string | undefined;
 
@@ -34,6 +35,7 @@ export async function getStockBars(
     let url =
       `${BASE}/v2/stocks/${symbol}/bars` +
       `?timeframe=${timeframe}&start=${start}&limit=1000&adjustment=all&feed=iex`;
+    if (end) url += `&end=${end}`;
     if (pageToken) url += `&page_token=${encodeURIComponent(pageToken)}`;
 
     const r = await fetch(url, { headers: headers() });

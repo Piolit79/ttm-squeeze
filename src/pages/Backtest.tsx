@@ -145,7 +145,7 @@ export default function Backtest() {
   const [endDate,   setEndDate]   = useState(today);
   const [ticker,    setTicker]    = useState('NVDA');
   const [tf,        setTf]        = useState<'1Hour' | '1Day'>('1Hour');
-  const [length,    setLength]    = useState('20');
+  const [length,    setLength]    = useState('7');
 
   // ── Run state ─────────────────────────────────────────────────────────────
   const [computing, setComputing] = useState(false);
@@ -153,15 +153,15 @@ export default function Backtest() {
   const [error,     setError]     = useState<string | null>(null);
 
   const { refetch: fetch1h } = useQuery({
-    queryKey:  ['bt-bars-1h', ticker],
-    queryFn:   () => fetchBars(ticker, '1Hour'),
+    queryKey:  ['bt-bars-1h', ticker, startDate, endDate],
+    queryFn:   () => fetchBars(ticker, '1Hour', startDate, endDate),
     enabled:   false,
     staleTime: 5 * 60_000,
   });
 
   const { refetch: fetch1d } = useQuery({
-    queryKey:  ['bt-bars-1d', ticker],
-    queryFn:   () => fetchBars(ticker, '1Day'),
+    queryKey:  ['bt-bars-1d', ticker, startDate, endDate],
+    queryFn:   () => fetchBars(ticker, '1Day', startDate, endDate),
     enabled:   false,
     staleTime: 5 * 60_000,
   });

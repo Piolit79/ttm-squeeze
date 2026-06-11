@@ -34,8 +34,9 @@ async function getBarsWithCache(
 ): Promise<OHLCBar[]> {
   const cached = await loadCachedBars(db, ticker, timeframe);
   if (cached) return cached;
-  const lookback = timeframe === '1Day' ? 400 : 365;
-  const raw = await getStockBars(ticker, timeframe, lookback);
+  const days = timeframe === '1Day' ? 400 : 365;
+  const start = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  const raw = await getStockBars(ticker, timeframe, start);
   const ohlc = toOHLC(raw);
   await saveBars(db, ticker, timeframe, ohlc);
   return ohlc;

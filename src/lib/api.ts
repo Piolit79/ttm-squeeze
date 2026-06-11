@@ -52,8 +52,16 @@ export interface ScanResponse {
   errors: { ticker: string; error: string }[];
 }
 
-export async function fetchBars(ticker: string, timeframe: "1Hour" | "1Day"): Promise<BarsResponse> {
-  const r = await fetch(`${BASE}/bars?ticker=${ticker}&timeframe=${timeframe}`);
+export async function fetchBars(
+  ticker: string,
+  timeframe: "1Hour" | "1Day",
+  startDate?: string,
+  endDate?: string,
+): Promise<BarsResponse> {
+  let url = `${BASE}/bars?ticker=${ticker}&timeframe=${timeframe}`;
+  if (startDate) url += `&start=${startDate}`;
+  if (endDate)   url += `&end=${endDate}`;
+  const r = await fetch(url);
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
   return r.json();
 }
